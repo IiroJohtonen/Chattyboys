@@ -8,6 +8,7 @@ import { AGENTS, AGENT_IDS, systemPrompt, turnPrompt, parseReply } from './lib/a
 import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspaceFile } from './lib/powers.js';
 import { discoverSkills, readSkill } from './lib/skills.js';
 import * as ig from './lib/instagram.js';
+import { browserStatus, login as igBrowserLogin, logout as igBrowserLogout, publishViaBrowser } from './lib/igbrowser.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1'; // vain omalta koneelta – käyttää tunnuksiasi
@@ -90,7 +91,7 @@ function send(type, data) {
 }
 function meta() {
   const { messages, pendingSkills, ...rest } = state;
-  return { ...rest, skills, instagram: { connected: ig.igConnected(), username: ig.igConfig().username }, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
+  return { ...rest, skills, instagram: { connected: ig.igConnected(), username: ig.igConfig().username, browser: browserStatus().loggedIn }, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
 }
 const broadcastMeta = () => { save(); send('meta', meta()); };
 
@@ -121,7 +122,7 @@ function budgetBlock() {
 // ---------- vuorot ----------
 async function videosForPrompt() {
   const usable = state.powers.some(p => p.name === 'instagram_publish' && p.status === 'enabled');
-  if (!ig.igConnected() || !usable) return null;
+  if (!(ig.igConnected() || browserStatus().loggedIn) || !usable) return null;
   return ig.listVideos().catch(() => []);
 }
 
@@ -315,7 +316,10 @@ function publishedToday() {
 
 let publishing = false;
 async function runInstagram(p, input = {}, who) {
-  if (p.name === 'instagram_insights') return ig.insights(input);
+  if (p.name === 'instagram_insights') {
+    if (!ig.igConnected()) throw new Error('Tilastot vaativat virallisen Instagram-tunnuksen (selainkirjautuminen ei riitä)');
+    return ig.insights(input);
+  }
   if (publishing) throw new Error('Toinen julkaisu on kesken – yritä hetken päästä');
   publishing = true;
   try { return await publishNow(input, who); } finally { publishing = false; }
@@ -327,7 +331,7 @@ async function publishNow(input, who) {
   }
   if ((state.igLog || []).some(l => l.video === input.video)) throw new Error(`${input.video} on jo julkaistu`);
   sysMsg(`📤 Julkaistaan ${input.video} Instagramiin… (käsittely voi kestää muutaman minuutin)`, { tool: 'instagram_publish' });
-  const r = await ig.publishReel(input);
+  const r = ig.igConnected() ? await ig.publishReel(input) : await publishViaBrowser(input);
   state.igLog = [...(state.igLog || []), { ts: now(), video: input.video, caption: String(input.caption || '').slice(0, 300), id: r.id, permalink: r.permalink, by: who }].slice(-200);
   return `✅ Julkaistu! ${r.permalink || 'id ' + r.id}`;
 }
@@ -468,6 +472,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/instagram') {
       const b = await body(req);
       if (b.disconnect) { ig.disconnect(); broadcastMeta(); return json(res, 200, { ok: true }); }
+      if (b.browserLogout) { igBrowserLogout(); broadcastMeta(); return json(res, 200, { ok: true }); }
+      if (b.browserLogin) {
+        try {
+          await igBrowserLogin();
+          sysMsg('📸 Instagram yhdistetty selainkirjautumisella. Huom: epävirallinen tapa – julkaise maltillisesti.');
+          broadcastMeta();
+          return json(res, 200, { ok: true });
+        } catch (e) { return json(res, 400, { error: e.message }); }
+      }
       try {
         const r = await ig.connect({ token: b.token?.trim(), userId: b.userId?.trim(), host: b.host?.trim(), version: b.version?.trim() });
         sysMsg(`📸 Instagram yhdistetty: @${r.username}`);

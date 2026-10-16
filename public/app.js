@@ -234,6 +234,13 @@ function renderSettings() {
 
 function renderInstagram() {
   const c = S.instagram || {};
+  const today = (S.igLog || []).filter(l => new Date(l.ts).toDateString() === new Date().toDateString()).length;
+  $('#ig-browser-logout').hidden = !c.browser;
+  if (!c.connected && c.browser) {
+    $('#ig-status').innerHTML = `✅ Yhdistetty selainkirjautumisella (epävirallinen) · julkaisuja tänään ${today}/${S.config.igDailyPublishLimit}`;
+    $('#ig-disconnect').hidden = true;
+    return;
+  }
   $('#ig-status').innerHTML = c.connected ? `✅ Yhdistetty: <b>@${esc(c.username || '?')}</b> · julkaisuja tänään ${(S.igLog || []).filter(l => new Date(l.ts).toDateString() === new Date().toDateString()).length}/${S.config.igDailyPublishLimit}` : 'Ei yhdistetty.';
   $('#ig-disconnect').hidden = !c.connected;
 }
@@ -293,6 +300,15 @@ $('#ig-form').onsubmit = async e => {
   const r = await api('/api/instagram', data);
   if (r.ok) { toast(`📸 Yhdistetty: @${r.username}`); e.target.reset(); }
 };
+$('#ig-browser-login').onclick = async e => {
+  if (!confirm('Selainkirjautuminen on epävirallinen tapa ja rikkoo Instagramin käyttöehtoja – tili voi lukittua. Jatketaanko?')) return;
+  e.target.disabled = true;
+  toast('🌐 Selainikkuna avautuu – kirjaudu Instagramiin (5 min aikaa)');
+  const r = await api('/api/instagram', { browserLogin: true });
+  e.target.disabled = false;
+  if (r.ok) toast('📸 Kirjautuminen onnistui');
+};
+$('#ig-browser-logout').onclick = () => api('/api/instagram', { browserLogout: true });
 $('#ig-disconnect').onclick = () => confirm('Katkaistaanko Instagram-yhteys?') && api('/api/instagram', { disconnect: true });
 
 $('#tabs').onclick = e => {

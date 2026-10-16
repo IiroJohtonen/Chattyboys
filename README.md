@@ -72,6 +72,13 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
     voimalle *aja kysymättä*, agentit julkaisevat itsenäisesti. Päiväraja (oletus 2, ⚙️) pätee aina, samaa
     videota ei julkaista kahdesti, eivätkä agentit voi muokata videokirjastoa. Julkaisuloki näkyy Voimat-välilehdellä.
   * Jos suora lataus omalta koneelta ei toimi tililläsi, anna agenteille julkinen https-linkki videoon.
+  * **Vaihtoehto: kirjautuminen selaimella (epävirallinen).** ⚠️ Rikkoo Instagramin käyttöehtoja, joten tili
+    voi joutua tarkistukseen tai lukituksi. Asenna ensin `npm install playwright` (jos koneella ei ole Google
+    Chromea, myös `npx playwright install chromium`). Paina ⚙️ → Instagram → **🌐 Kirjaudu selaimella** ja
+    kirjaudu avautuvaan ikkunaan itse. Salasanaa ei tallenneta: kirjautuminen säilyy selainprofiilissa
+    `data/ig-browser`. Julkaisu tapahtuu instagram.comin kautta selainikkunassa (aseta `IG_BROWSER_HEADLESS=1`,
+    jos haluat sen piiloon). Jos jokin vaihe epäonnistuu, työtilaan tallentuu kuvakaappaus `ig-virhe-*.png`.
+    Tilastot vaativat virallisen tunnuksen.
 * **📁 Työtila** – agenttien kirjoittamat luonnokset, suunnitelmat ja sivut.
 
 ## Turvallisuus

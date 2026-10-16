@@ -96,6 +96,12 @@
             <button class="btn primary">Yhdistä</button>
             <button type="button" class="btn danger" id="ig-disconnect" hidden>Katkaise yhteys</button>
           </div>
+          <div class="section-title" style="margin-top:6px">Tai: kirjautuminen selaimella (epävirallinen)</div>
+          <p class="hint warn">⚠️ Rikkoo Instagramin käyttöehtoja – tili voi joutua tarkistukseen tai lukituksi. Salasanaasi ei tallenneta: kirjaudut itse avautuvaan selainikkunaan. Vaatii Playwrightin (<code>npm install playwright</code>). Tilastot eivät toimi tällä tavalla.</p>
+          <div class="item-actions" style="margin:0">
+            <button type="button" class="btn" id="ig-browser-login">🌐 Kirjaudu selaimella</button>
+            <button type="button" class="btn danger" id="ig-browser-logout" hidden>Unohda selainkirjautuminen</button>
+          </div>
           <p class="hint">Tunnus tallennetaan vain koneellesi (<code>data/secrets.json</code>), eikä sitä näytetä agenteille. Laita julkaistavat videot kansioon <code>workspace/videos/</code>. Avaa sitten Voimat-välilehdeltä <b>instagram_insights</b> ja <b>instagram_publish</b>.</p>
         </form>
         <hr>
