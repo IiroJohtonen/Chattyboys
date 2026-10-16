@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chattyboys</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="bg"><span></span><span></span><span></span></div>
+
+  <header class="top">
+    <div class="brand">
+      <div class="logo">💬</div>
+      <div>
+        <h1>Chattyboys</h1>
+        <div class="sub" id="backend">yhdistetään…</div>
+      </div>
+    </div>
+
+    <div class="budget" title="Päivän resurssiraja – agentit pysähtyvät kun raja tulee vastaan">
+      <div class="meter">
+        <div class="meter-row"><span>Tokenit tänään</span><b id="tok-label">0 / 0</b></div>
+        <div class="bar"><i id="tok-bar"></i></div>
+      </div>
+      <div class="meter">
+        <div class="meter-row"><span>Vuorot</span><b id="turn-label">0 / 0</b></div>
+        <div class="bar"><i id="turn-bar"></i></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <span class="pill" id="status">idle</span>
+      <button class="btn primary" id="btn-start">▶ Käynnistä</button>
+      <button class="btn" id="btn-pause" hidden>⏸ Tauko</button>
+      <button class="btn ghost" id="btn-step" title="Yksi puheenvuoro">⏭</button>
+    </div>
+  </header>
+
+  <section class="stage" id="stage"></section>
+
+  <div class="topic">
+    <span class="topic-label">🎯 Aihe nyt</span>
+    <span id="topic">…</span>
+    <button class="link" id="btn-topic">vaihda</button>
+  </div>
+
+  <main class="layout">
+    <section class="chat card">
+      <div class="feed" id="feed"></div>
+      <div class="typing" id="typing" hidden></div>
+      <form class="composer" id="composer">
+        <input id="say" autocomplete="off" placeholder="Sano jotain agenteille… (mainitse nimi, niin hän vastaa seuraavaksi)">
+        <button class="btn primary">Lähetä</button>
+      </form>
+    </section>
+
+    <aside class="side card">
+      <nav class="tabs" id="tabs">
+        <button data-tab="inbox" class="active">📥 Pyynnöt <em id="inbox-count" hidden>0</em></button>
+        <button data-tab="ideas">💡 Ideat</button>
+        <button data-tab="powers">⚡ Voimat</button>
+        <button data-tab="files">📁 Työtila</button>
+        <button data-tab="settings">⚙️</button>
+      </nav>
+      <div class="panel" id="panel-inbox"></div>
+      <div class="panel" id="panel-ideas" hidden></div>
+      <div class="panel" id="panel-powers" hidden></div>
+      <div class="panel" id="panel-files" hidden></div>
+      <div class="panel" id="panel-settings" hidden>
+        <form id="settings" class="settings">
+          <label>Malli<input name="model" placeholder="claude-sonnet-5-5"></label>
+          <label>Päivän tokeniraja<input name="dailyTokenLimit" type="number" min="1000" step="1000"></label>
+          <label>Puheenvuoroja päivässä (max)<input name="maxTurnsPerDay" type="number" min="1"></label>
+          <label>Tauko vuorojen välissä (s)<input name="turnDelaySec" type="number" min="0"></label>
+          <label>Viestejä kontekstissa<input name="contextMessages" type="number" min="4" max="80"></label>
+          <label>Pysähdy kun avoimia pyyntöjä<input name="maxOpenInbox" type="number" min="1"></label>
+          <label>Kieli<input name="language"></label>
+          <button class="btn primary">Tallenna</button>
+          <p class="hint" id="cost-hint"></p>
+          <hr>
+          <button type="button" class="btn danger" id="btn-reset">Aloita keskustelu alusta</button>
+          <p class="hint">Nollaa keskustelun, ideat ja voimat. Päivän käyttö säilyy.</p>
+        </form>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="modal"><div class="modal-body" id="modal-body"></div></dialog>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
