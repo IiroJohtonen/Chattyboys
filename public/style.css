@@ -173,6 +173,9 @@ h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
 .notes li { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 .file { flex: none; display: flex; justify-content: space-between; padding: 9px 12px; border-radius: 10px; background: var(--card-strong); border: 1px solid var(--border); cursor: pointer; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
 .file:hover { border-color: var(--accent); }
+.settings textarea { width: 100%; resize: vertical; font-size: 13px; line-height: 1.5; }
+.video .item-detail b { color: var(--text); font-weight: 600; }
+details summary { cursor: pointer; margin-top: 6px; }
 .skill { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; padding: 10px 12px; }
 .skill input { margin-top: 3px; accent-color: var(--ok); flex: none; }
 .skill .item-title { display: block; font-size: 13px; font-family: 'JetBrains Mono', monospace; }

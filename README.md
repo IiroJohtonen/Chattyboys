@@ -79,6 +79,26 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
     `data/ig-browser`. Julkaisu tapahtuu instagram.comin kautta selainikkunassa (aseta `IG_BROWSER_HEADLESS=1`,
     jos haluat sen piiloon). Jos jokin vaihe epäonnistuu, työtilaan tallentuu kuvakaappaus `ig-virhe-*.png`.
     Tilastot vaativat virallisen tunnuksen.
+* **🎬 Videokirjasto** (📁 Työtila-välilehti) – kopioi videot kansioon `workspace/videos/`.
+  * **Agentit katsovat videot itse:** jokaisesta uudesta videosta otetaan 6 avainkuvaa (ensimmäinen koukusta),
+    selvitetään kesto, kuvasuhde ja ääni, litteroidaan puhe (jos Whisper on asennettu) ja Claude kirjoittaa
+    analyysin: sisältö, koukun arvosana, vahvuudet, parannettavaa ja kuvatekstiehdotuksia. Analyysi tehdään
+    kerran per video ja lasketaan päivän tokenibudjettiin (~6 000 tokenia). Voit lisätä videolle oman muistiinpanon.
+  * `video_edit` – agentit tekevät muokattuja versioita kansioon `videos/edits/`: `trim` (rajaus),
+    `vertical` (9:16), `hook_text` (koukkuteksti alkuun) ja `subtitles` (tekstitys litteroinnista).
+    Vain nämä kiinteät toiminnot ovat mahdollisia.
+  * `request_video` – kun kirjasto tyhjenee tai jokin aihe toimii, agentit kirjoittavat kuvauskäsikirjoituksen
+    (koukku, kohtaukset, teksti ruudulla, pituus) kansioon `scripts/` ja Pyynnöt-välilehdelle.
+  * Vaatii **ffmpegin** (Windows: `winget install ffmpeg`). Litterointi vaatii lisäksi Whisperin
+    (`pip install openai-whisper`, valinnainen).
+* **🎨 Brändiprofiili** (⚙️) – kohdeyleisö, aihe, äänensävy, tavoite ja kielletyt asiat. Agentit noudattavat sitä aina.
+  Jos se on tyhjä, agentit kysyvät tiedot sinulta ja kirjoittavat tiedoston `brand.md` itse.
+* **📊 Palautesilmukka** – 24 tunnin ja 7 päivän kuluttua julkaisusta alusta hakee tulokset (katselut,
+  tavoittavuus, tykkäykset, jaot, tallennukset), kirjaa ne muistioon ja näyttää agenteille, jotta ne oppivat mikä
+  toimii. Tilastoissa näkyy myös julkaisuaika, josta agentit päättelevät parhaan ajan. Vaatii virallisen tunnuksen.
+* **💬 Kommentit** – `instagram_comments` lukee viimeisimpien julkaisujen kommentit ja `instagram_reply` vastaa
+  niihin (jokainen vastaus hyväksytään, ellei rastita *aja kysymättä*). Kommentit merkitään ulkopuoliseksi
+  sisällöksi, jonka ohjeita agentit eivät noudata. Vaatii virallisen tunnuksen.
 * **📁 Työtila** – agenttien kirjoittamat luonnokset, suunnitelmat ja sivut.
 
 ## Turvallisuus

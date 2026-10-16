@@ -8,6 +8,8 @@ import { AGENTS, AGENT_IDS, systemPrompt, turnPrompt, parseReply } from './lib/a
 import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspaceFile } from './lib/powers.js';
 import { discoverSkills, readSkill } from './lib/skills.js';
 import * as ig from './lib/instagram.js';
+import * as media from './lib/media.js';
+import { WORKSPACE } from './lib/powers.js';
 import { browserStatus, login as igBrowserLogin, logout as igBrowserLogout, publishViaBrowser } from './lib/igbrowser.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -25,6 +27,7 @@ const DEFAULT_CONFIG = {
   maxOpenInbox: 3, // pysähdytään odottamaan, jos näin monta pyyntöä on vastaamatta
   language: 'suomi',
   igDailyPublishLimit: Number(process.env.IG_DAILY_PUBLISH_LIMIT || 2),
+  autoAnalyzeVideos: Number(process.env.AUTO_ANALYZE_VIDEOS ?? 1), // 1 = agentit "katsovat" uudet videot automaattisesti
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -121,9 +124,15 @@ function budgetBlock() {
 
 // ---------- vuorot ----------
 async function videosForPrompt() {
-  const usable = state.powers.some(p => p.name === 'instagram_publish' && p.status === 'enabled');
-  if (!(ig.igConnected() || browserStatus().loggedIn) || !usable) return null;
-  return ig.listVideos().catch(() => []);
+  const videos = await media.listVideos().catch(() => []);
+  const igOn = ig.igConnected() || browserStatus().loggedIn;
+  if (!videos.length && !igOn) return null;
+  return videos.map(v => ({ ...v, line: media.videoLine(v) }));
+}
+
+const BRAND_FILE = path.join(WORKSPACE, 'brand.md');
+async function readBrand() {
+  try { return (await fs.readFile(BRAND_FILE, 'utf8')).trim().slice(0, 1500); } catch { return ''; }
 }
 
 function takeLoaded(agentId) {
@@ -179,7 +188,7 @@ async function runTurn({ force = false } = {}) {
   try {
     const { text, tokens, costUsd } = await complete({
       system: systemPrompt(agent, state.config),
-      prompt: turnPrompt(state, agentId, state.config, { skills: enabledSkillList(), loaded: takeLoaded(agentId), videos: await videosForPrompt() }),
+      prompt: turnPrompt(state, agentId, state.config, { skills: enabledSkillList(), loaded: takeLoaded(agentId), videos: await videosForPrompt(), brand: await readBrand() }),
       model: state.config.model,
     });
     rollDay();
@@ -260,6 +269,16 @@ async function handleAction(agentId, a) {
       if (state.notes.length > 30) state.notes.shift();
       return { icon: '📝', summary: `muistiinpano: ${a.text}` };
     }
+    case 'request_video': {
+      if (!a.title) throw new Error('title puuttuu');
+      const slug = String(a.title).toLowerCase().replace(/[^a-z0-9äöå]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40) || 'video';
+      const scenes = Array.isArray(a.scenes) ? a.scenes : [a.scenes].filter(Boolean);
+      const script = `# ${a.title}\n\n**Pituus:** ~${a.length_s || '?'} s · **Muoto:** pysty 9:16\n\n**Koukku (2 ensimmäistä sekuntia):** ${a.hook || '-'}\n\n**Kohtaukset:**\n${scenes.map((x, i) => `${i + 1}. ${x}`).join('\n') || '-'}\n\n**Teksti ruudulla:** ${a.on_screen_text || '-'}\n\n**Huomioita:** ${a.notes || '-'}\n\n_Kirjoittanut: ${AGENTS[agentId].name}_\n`;
+      await fs.mkdir(path.join(WORKSPACE, 'scripts'), { recursive: true });
+      await fs.writeFile(path.join(WORKSPACE, 'scripts', `${slug}.md`), script, 'utf8');
+      addInbox({ type: 'footage', from: agentId, title: `Kuvaa video: ${String(a.title).slice(0, 120)}`, detail: script.replace(/[*_#]/g, '').trim() + `\n\nKun video on valmis, tallenna se kansioon workspace/videos/ ja merkitse tehdyksi.`, script: `scripts/${slug}.md` });
+      return { icon: '🎥', summary: `pyysi kuvaamaan: ${a.title}` };
+    }
     case 'load_skill': {
       const k = enabledSkillList().find(x => x.id === a.name || x.name === a.name);
       if (!k) throw new Error(`taitoa ${a.name} ei ole annettu`);
@@ -316,9 +335,11 @@ function publishedToday() {
 
 let publishing = false;
 async function runInstagram(p, input = {}, who) {
-  if (p.name === 'instagram_insights') {
-    if (!ig.igConnected()) throw new Error('Tilastot vaativat virallisen Instagram-tunnuksen (selainkirjautuminen ei riitä)');
-    return ig.insights(input);
+  if (['instagram_insights', 'instagram_comments', 'instagram_reply'].includes(p.name)) {
+    if (!ig.igConnected()) throw new Error(`${p.name} vaatii virallisen Instagram-tunnuksen (selainkirjautuminen ei riitä)`);
+    if (p.name === 'instagram_insights') return ig.insights(input);
+    if (p.name === 'instagram_comments') return ig.comments(input);
+    return ig.reply(input);
   }
   if (publishing) throw new Error('Toinen julkaisu on kesken – yritä hetken päästä');
   publishing = true;
@@ -338,7 +359,9 @@ async function publishNow(input, who) {
 
 async function runPowerAsync(p, input, who) {
   try {
-    const out = p.name.startsWith('instagram_') ? await runInstagram(p, input, who) : await executePower(p, input);
+    const out = p.name.startsWith('instagram_') ? await runInstagram(p, input, who)
+      : p.name === 'video_edit' ? await media.editVideo(input)
+      : await executePower(p, input);
     sysMsg(`⚙️ ${p.name} (${who}):\n${out}`, { tool: p.name });
   } catch (e) {
     sysMsg(`⚠️ ${p.name} epäonnistui: ${e.message}`, { tool: p.name });
@@ -370,6 +393,10 @@ async function resolveInbox(id, { decision, text = '' }) {
       sysMsg(decision === 'deny' ? `🚫 Voimaa ${it.power} ei hyväksytty.${note}` : `⚡ Uusi voima käytössä: ${it.power}!${note}`);
       break;
     }
+    case 'footage':
+      sysMsg(decision === 'deny' ? `🚫 Omistaja ei kuvaa videota "${it.title.replace(/^Kuvaa video: /, '')}".${note}` : `🎥 Omistaja kuvasi videon "${it.title.replace(/^Kuvaa video: /, '')}" – se ilmestyy kirjastoon.${note}`);
+      setTimeout(() => analyzePending().catch(() => {}), 3000);
+      break;
     case 'task':
       sysMsg(decision === 'deny' ? `🚫 Omistaja ei suorittanut tehtävää ${it.power}.${note}` : `🧑‍🔧 Omistaja suoritti ${it.power}. Tulos: ${text || '(ei kommenttia)'}`, { tool: it.power });
       break;
@@ -488,6 +515,28 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true, ...r });
       } catch (e) { return json(res, 400, { error: e.message }); }
     }
+    if (url.pathname === '/api/brand') {
+      if (req.method === 'POST') {
+        const b = await body(req);
+        await fs.mkdir(WORKSPACE, { recursive: true });
+        await fs.writeFile(BRAND_FILE, String(b.text || '').slice(0, 5000), 'utf8');
+        sysMsg('🎨 Omistaja päivitti brändiprofiilin.');
+        return json(res, 200, { ok: true });
+      }
+      return json(res, 200, { text: await fs.readFile(BRAND_FILE, 'utf8').catch(() => '') });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/videos') {
+      const tools = await media.mediaTools();
+      const published = new Set((state.igLog || []).map(l => l.video));
+      const list = (await media.listVideos()).map(v => ({ ...v, meta: media.videoMeta(v.file), published: published.has(v.file) }));
+      return json(res, 200, { tools, videos: list });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/videos') {
+      const b = await body(req);
+      if (b.note !== undefined) { media.resolveVideo(b.file); media.setOwnerNote(b.file, b.note); }
+      if (b.analyze) setTimeout(() => analyzePending().catch(() => {}), 100);
+      return json(res, 200, { ok: true });
+    }
     if (req.method === 'POST' && url.pathname === '/api/skills') {
       const b = await body(req);
       if (b.refresh) await refreshSkills();
@@ -515,6 +564,56 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// ---------- taustatyöt ----------
+// 1) Agentit "katsovat" uudet videot: avainkuvat + litterointi + Clauden kuvaus (kerran per video).
+let analyzing = false;
+const analyzeFailed = new Map();
+async function analyzePending() {
+  if (analyzing || !state.config.autoAnalyzeVideos) return;
+  if (!(await media.mediaTools()).ffmpeg) return;
+  analyzing = true;
+  try {
+    for (const v of await media.listVideos()) {
+      if (v.file.startsWith('videos/edits/') || media.videoMeta(v.file)?.analysis) continue;
+      if (now() - (analyzeFailed.get(v.file) || 0) < 3600_000) continue;
+      if (budgetBlock()) break;
+      try {
+        const { tokens, meta: m } = await media.analyzeVideo(v.file, { model: state.config.model });
+        state.usage.tokens += tokens;
+        sysMsg(`🎬 Agentit katsoivat videon ${v.file}: ${m.analysis?.summary || ''}${m.transcriptError ? ' (litterointi epäonnistui)' : ''}`);
+      } catch (e) {
+        analyzeFailed.set(v.file, now());
+        sysMsg(`⚠️ Videon ${v.file} analyysi epäonnistui: ${e.message}`);
+      }
+      broadcastMeta();
+    }
+  } finally { analyzing = false; }
+}
+
+// 2) Palautesilmukka: julkaisujen tulokset 24 h ja 7 pv kohdalla muistioon.
+async function checkStats() {
+  if (!ig.igConnected()) return;
+  for (const l of state.igLog || []) {
+    if (!l.id || l.id === 'selain') continue;
+    const age = now() - l.ts;
+    const due = !l.stats24 && age > 24 * 3600_000 ? 'stats24' : !l.stats7d && age > 7 * 24 * 3600_000 ? 'stats7d' : null;
+    if (!due) continue;
+    try {
+      l[due] = await ig.mediaStats(l.id);
+      const s = l[due], label = due === 'stats24' ? '24 h' : '7 pv';
+      const line = `${l.video} ${label}: katselut ${s.views ?? '?'}, tavoittavuus ${s.reach ?? '?'}, tykkäykset ${s.likes}, kommentit ${s.comments}, jaot ${s.shares ?? '?'}, tallennukset ${s.saved ?? '?'}`;
+      sysMsg(`📊 Tulokset – ${line}`);
+      state.notes.push({ text: `Tulos: ${line}`.slice(0, 300), by: 'system', ts: now() });
+      if (state.notes.length > 30) state.notes.shift();
+    } catch (e) { console.error('Tilastojen haku epäonnistui:', e.message); }
+  }
+  broadcastMeta();
+}
+
+setInterval(() => analyzePending().catch(e => console.error(e)), 2 * 60_000);
+setInterval(() => checkStats().catch(e => console.error(e)), 15 * 60_000);
+setTimeout(() => { analyzePending().catch(() => {}); checkStats().catch(() => {}); }, 5000);
+
 await refreshSkills();
 server.listen(PORT, HOST, () => {
   console.log(`\n  🦄🦉🦊  Chattyboys käynnissä: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
@@ -524,6 +623,7 @@ server.listen(PORT, HOST, () => {
     console.log(bin ? `  Claude-ohjelma: ${[bin.cmd, ...bin.pre].join(' ')}`
       : '  ⚠️  claude-ohjelmaa EI löytynyt! Asenna: npm install -g @anthropic-ai/claude-code, kirjaudu komennolla claude ja käynnistä tämä uudelleen.');
   }
+  media.mediaTools().then(t => console.log(`  Videotyökalut: ffmpeg ${t.ffmpeg ? '✅' : '❌ (asenna, jotta agentit näkevät videot)'} · whisper ${t.whisper ? '✅' : '– (valinnainen, puheen litterointi)'}`));
   console.log(`  Taitoja löytyi: ${skills.length} (käytössä ${enabledSkillList().length})`);
   console.log(`  Päiväraja: ${state.config.dailyTokenLimit.toLocaleString('fi-FI')} tokenia / ${state.config.maxTurnsPerDay} vuoroa\n`);
 });

@@ -82,9 +82,17 @@
           <label>Pysähdy kun avoimia pyyntöjä<input name="maxOpenInbox" type="number" min="1"></label>
           <label>Kieli<input name="language"></label>
           <label>Instagram-julkaisuja päivässä (max)<input name="igDailyPublishLimit" type="number" min="0" max="25"></label>
+          <label>Analysoi uudet videot automaattisesti (1 = kyllä, 0 = ei)<input name="autoAnalyzeVideos" type="number" min="0" max="1"></label>
           <button class="btn primary">Tallenna</button>
           <p class="hint" id="cost-hint"></p>
         </form>
+        <hr>
+        <div class="settings">
+          <div class="section-title">🎨 Brändiprofiili</div>
+          <p class="hint">Agentit noudattavat tätä jokaisessa julkaisussa. Jätä tyhjäksi, niin agentit kysyvät tiedot sinulta ja kirjoittavat profiilin itse.</p>
+          <textarea id="brand-text" rows="8" placeholder="Kohdeyleisö: …&#10;Aihe / nisse: …&#10;Äänensävy: …&#10;Tavoite: (seuraajat / myynti / liikenne linkkiin)&#10;Ei koskaan: …"></textarea>
+          <button type="button" class="btn primary" data-brand-save="1">Tallenna brändiprofiili</button>
+        </div>
         <hr>
         <form id="ig-form" class="settings">
           <div class="section-title">📸 Instagram</div>

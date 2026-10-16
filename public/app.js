@@ -124,7 +124,7 @@ function renderInbox() {
   const cnt = $('#inbox-count'); cnt.hidden = !open.length; cnt.textContent = open.length;
   document.title = open.length ? `(${open.length}) Chattyboys` : 'Chattyboys';
 
-  const typeLabel = { question: '❓ Kysymys', permission: '🔐 Lupapyyntö', power: '⚡ Uusi voima', task: '🧑‍🔧 Tehtävä sinulle', run: '▶️ Ajopyyntö' };
+  const typeLabel = { question: '❓ Kysymys', permission: '🔐 Lupapyyntö', power: '⚡ Uusi voima', task: '🧑‍🔧 Tehtävä sinulle', run: '▶️ Ajopyyntö', footage: '🎥 Kuvauspyyntö' };
   const card = i => {
     const c = colorOf(i.from);
     const isOpen = i.status === 'open';
@@ -133,8 +133,8 @@ function renderInbox() {
     if (i.code) body += `<pre>${esc(i.code)}</pre>`;
     let actions = '';
     if (isOpen) {
-      const ph = i.type === 'question' ? 'Vastauksesi…' : i.type === 'task' ? 'Mitä teit / tulos (esim. linkki)…' : 'Kommentti (valinnainen)…';
-      const yes = { question: 'Vastaa', permission: 'Hyväksy', power: 'Myönnä voima', task: 'Tehty', run: 'Aja' }[i.type];
+      const ph = i.type === 'question' ? 'Vastauksesi…' : i.type === 'task' ? 'Mitä teit / tulos (esim. linkki)…' : i.type === 'footage' ? 'Videon tiedostonimi tai kommentti…' : 'Kommentti (valinnainen)…';
+      const yes = { question: 'Vastaa', permission: 'Hyväksy', power: 'Myönnä voima', task: 'Tehty', run: 'Aja', footage: 'Kuvattu ✓' }[i.type];
       actions = `<textarea placeholder="${ph}" data-text="${i.id}"></textarea>
         <div class="item-actions">
           <button class="btn sm ok" data-act="approve" data-id="${i.id}">${yes}</button>
@@ -219,9 +219,35 @@ function renderSkills() {
 
 async function renderFiles() {
   if (activeTab !== 'files') return;
-  const files = await fetch('/api/files').then(r => r.json()).catch(() => []);
-  $('#panel-files').innerHTML = `<p class="hint">Agenttien työtila (<code>workspace/</code>). Täältä löydät heidän kirjoittamansa luonnokset, suunnitelmat ja sivut.</p>` +
-    (files.length ? files.map(f => `<div class="file" data-file="${esc(f.path)}"><span>📄 ${esc(f.path)}</span><span>${fmt(f.size)} t</span></div>`).join('')
+  const panel = $('#panel-files');
+  if (panel.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // älä pyyhi kirjoitettavaa
+  const [files, lib] = await Promise.all([
+    fetch('/api/files').then(r => r.json()).catch(() => []),
+    fetch('/api/videos').then(r => r.json()).catch(() => ({ tools: {}, videos: [] })),
+  ]);
+  const t = lib.tools || {};
+  const warn = !t.ffmpeg ? `<p class="hint warn">⚠️ ffmpeg puuttuu – agentit eivät näe videoiden sisältöä eivätkä voi muokata niitä. Asenna ffmpeg ja käynnistä alusta uudelleen.</p>`
+    : !t.whisper ? `<p class="hint">Puheen litterointi ja tekstitys vaativat Whisperin (valinnainen): <code>pip install openai-whisper</code></p>` : '';
+  const vids = (lib.videos || []).map(v => {
+    const m = v.meta || {}, a = m.analysis;
+    return `<div class="item video" style="--c:${v.published ? 'var(--ok)' : a ? 'var(--accent2)' : 'var(--border)'}">
+      <div class="item-head"><span class="tag">🎬 ${esc(v.file.replace(/^videos\//, ''))}</span>
+        <span>${m.duration ? m.duration + ' s · ' + (m.vertical ? '9:16' : esc(m.ratio || '')) : fmt(v.mb) + ' Mt'}</span>
+        <span class="right status-tag ${v.published ? 'live' : a ? 'researching' : 'pending'}">${v.published ? 'julkaistu' : a ? 'analysoitu' : 'odottaa analyysia'}</span></div>
+      ${a ? `<div class="item-detail"><b>Sisältö:</b> ${esc(a.summary || '')}</div>
+        ${a.hook ? `<div class="item-detail"><b>Koukku:</b> ${esc(a.hook)}</div>` : ''}
+        ${a.weaknesses ? `<div class="item-detail"><b>Parannettavaa:</b> ${esc(a.weaknesses)}</div>` : ''}
+        ${m.transcript ? `<details><summary class="hint">Litterointi</summary><div class="item-detail">${esc(m.transcript)}</div></details>` : ''}`
+      : (m.derivedFrom ? `<div class="item-detail">Muokattu versio: ${esc(m.op || '')}</div>` : '')}
+      <textarea data-vnote="${esc(v.file)}" placeholder="Oma muistiinpano agenteille (esim. mistä video kertoo, mitä korostaa)…">${esc(m.ownerNote || '')}</textarea>
+      <div class="item-actions"><button class="btn sm" data-vsave="${esc(v.file)}">Tallenna muistiinpano</button>
+        ${!a && t.ffmpeg && !v.file.startsWith('videos/edits/') ? `<button class="btn sm ghost" data-vanalyze="1">🔍 Analysoi nyt</button>` : ''}</div>
+    </div>`;
+  }).join('');
+  panel.innerHTML = `<div class="section-title">🎬 Videokirjasto (workspace/videos/)</div>${warn}` +
+    (vids || `<div class="panel-empty">Ei videoita. Kopioi .mp4- tai .mov-tiedostoja kansioon <code>workspace/videos/</code> – agentit katsovat ne automaattisesti.</div>`) +
+    `<div class="section-title">📄 Tiedostot</div>` +
+    (files.length ? files.filter(f => !/^videos[\\/]/.test(f.path) && !/^powers[\\/]/.test(f.path)).map(f => `<div class="file" data-file="${esc(f.path)}"><span>📄 ${esc(f.path)}</span><span>${fmt(f.size)} t</span></div>`).join('')
       : `<div class="panel-empty">Työtila on tyhjä.</div>`);
 }
 
@@ -264,7 +290,7 @@ function connect() {
   });
   es.addEventListener('message', e => {
     const m = JSON.parse(e.data); messages.push(m); appendMessage(m); renderStage();
-    if (activeTab === 'files' && m.tool) renderFiles();
+    if (activeTab === 'files' && (m.tool || /^(🎬|📊|⚙️ video_edit)/.test(m.text))) renderFiles();
   });
   es.addEventListener('message-update', e => {
     const { id, actions } = JSON.parse(e.data);
@@ -317,6 +343,7 @@ $('#tabs').onclick = e => {
   document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('active', x === b));
   document.querySelectorAll('.panel').forEach(p => (p.hidden = p.id !== 'panel-' + activeTab));
   renderFiles();
+  if (activeTab === 'settings') fetch('/api/brand').then(r => r.json()).then(b => { if (document.activeElement !== $('#brand-text')) $('#brand-text').value = b.text || ''; });
 };
 
 function modal(title, content) {
@@ -325,8 +352,14 @@ function modal(title, content) {
 }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-act],[data-vote],[data-code],[data-file],[data-pstatus],[data-skills-refresh]');
+  const t = e.target.closest('[data-act],[data-vote],[data-code],[data-file],[data-pstatus],[data-skills-refresh],[data-vsave],[data-vanalyze],[data-brand-save]');
   if (!t) return;
+  if (t.dataset.vsave) {
+    const note = document.querySelector(`textarea[data-vnote="${CSS.escape(t.dataset.vsave)}"]`)?.value || '';
+    await api('/api/videos', { file: t.dataset.vsave, note }); toast('✅ Muistiinpano tallennettu'); return;
+  }
+  if (t.dataset.vanalyze) { await api('/api/videos', { analyze: true }); toast('🔍 Analyysi käynnistyi – tulos näkyy keskustelussa'); return; }
+  if (t.dataset.brandSave) { await api('/api/brand', { text: $('#brand-text').value }); toast('🎨 Brändiprofiili tallennettu'); return; }
   if (t.dataset.skillsRefresh) { const r = await api('/api/skills', { refresh: true }); toast(`🧠 Löytyi ${r.count ?? 0} taitoa`); return; }
   if (t.dataset.act) {
     const text = document.querySelector(`textarea[data-text="${t.dataset.id}"]`)?.value || '';
