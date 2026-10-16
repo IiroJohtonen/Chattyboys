@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { complete, backendName, resolveClaude } from './lib/llm.js';
 import { AGENTS, AGENT_IDS, systemPrompt, turnPrompt, parseReply } from './lib/agents.js';
 import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspaceFile } from './lib/powers.js';
+import { discoverSkills, readSkill } from './lib/skills.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1'; // vain omalta koneelta – käyttää tunnuksiasi
@@ -43,10 +44,15 @@ function freshState() {
     inbox: [],
     usage: { date: today(), tokens: 0, turns: 0, costUsd: 0 },
     usageHistory: [],
+    enabledSkills: [],
+    pendingSkills: {},
   };
 }
 
 let state = freshState();
+let skills = []; // koneelta löydetyt taidot
+async function refreshSkills() { skills = await discoverSkills(); }
+const enabledSkillList = () => skills.filter(k => state.enabledSkills?.includes(k.id));
 if (existsSync(STATE_FILE)) {
   try {
     const saved = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
@@ -76,8 +82,8 @@ function send(type, data) {
   for (const res of clients) res.write(payload);
 }
 function meta() {
-  const { messages, ...rest } = state;
-  return { ...rest, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
+  const { messages, pendingSkills, ...rest } = state;
+  return { ...rest, skills, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
 }
 const broadcastMeta = () => { save(); send('meta', meta()); };
 
@@ -106,6 +112,12 @@ function budgetBlock() {
 }
 
 // ---------- vuorot ----------
+function takeLoaded(agentId) {
+  const l = state.pendingSkills?.[agentId] || [];
+  if (state.pendingSkills) delete state.pendingSkills[agentId];
+  return l;
+}
+
 let busy = false, timer = null, consecutiveErrors = 0, lastNext = null;
 
 function pickSpeaker() {
@@ -153,7 +165,7 @@ async function runTurn({ force = false } = {}) {
   try {
     const { text, tokens, costUsd } = await complete({
       system: systemPrompt(agent, state.config),
-      prompt: turnPrompt(state, agentId, state.config),
+      prompt: turnPrompt(state, agentId, state.config, { skills: enabledSkillList(), loaded: takeLoaded(agentId) }),
       model: state.config.model,
     });
     rollDay();
@@ -233,6 +245,15 @@ async function handleAction(agentId, a) {
       state.notes.push({ text: String(a.text).slice(0, 300), by: agentId, ts: now() });
       if (state.notes.length > 30) state.notes.shift();
       return { icon: '📝', summary: `muistiinpano: ${a.text}` };
+    }
+    case 'load_skill': {
+      const k = enabledSkillList().find(x => x.id === a.name || x.name === a.name);
+      if (!k) throw new Error(`taitoa ${a.name} ei ole annettu`);
+      state.pendingSkills ||= {};
+      const list = (state.pendingSkills[agentId] ||= []);
+      if (!list.find(l => l.id === k.id)) list.push({ id: k.id, text: await readSkill(k) });
+      if (list.length > 2) list.shift(); // max 2 taitoa kerrallaan – säästää tokeneita
+      return { icon: '🧠', summary: `luki taidon ${k.id}` };
     }
     case 'propose_power': {
       const name = String(a.name || '').toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40);
@@ -357,7 +378,7 @@ const server = http.createServer(async (req, res) => {
         runTurn({ force: true });
       } else if (action === 'reset') {
         clearTimeout(timer);
-        const keep = { config: state.config, usage: state.usage, usageHistory: state.usageHistory };
+        const keep = { config: state.config, usage: state.usage, usageHistory: state.usageHistory, enabledSkills: state.enabledSkills };
         state = { ...freshState(), ...keep };
         send('snapshot', { ...meta(), messages: [] }); save();
       }
@@ -407,6 +428,18 @@ const server = http.createServer(async (req, res) => {
       broadcastMeta();
       return json(res, 200, { ok: true });
     }
+    if (req.method === 'POST' && url.pathname === '/api/skills') {
+      const b = await body(req);
+      if (b.refresh) await refreshSkills();
+      if (Array.isArray(b.enabled)) state.enabledSkills = b.enabled.filter(id => skills.some(k => k.id === id)).slice(0, 40);
+      if (b.toggle) {
+        const set = new Set(state.enabledSkills);
+        set.has(b.toggle) ? set.delete(b.toggle) : skills.some(k => k.id === b.toggle) && set.add(b.toggle);
+        state.enabledSkills = [...set].slice(0, 40);
+      }
+      broadcastMeta();
+      return json(res, 200, { ok: true, count: skills.length });
+    }
     if (req.method === 'GET' && url.pathname === '/api/files') return json(res, 200, await listWorkspace());
     if (req.method === 'GET' && url.pathname === '/api/file') return json(res, 200, { content: await readWorkspaceFile(url.searchParams.get('path')) });
 
@@ -422,6 +455,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+await refreshSkills();
 server.listen(PORT, HOST, () => {
   console.log(`\n  🦄🦉🦊  Chattyboys käynnissä: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`  Taustapalvelu: ${backendName()} · malli: ${state.config.model}`);
@@ -430,5 +464,6 @@ server.listen(PORT, HOST, () => {
     console.log(bin ? `  Claude-ohjelma: ${[bin.cmd, ...bin.pre].join(' ')}`
       : '  ⚠️  claude-ohjelmaa EI löytynyt! Asenna: npm install -g @anthropic-ai/claude-code, kirjaudu komennolla claude ja käynnistä tämä uudelleen.');
   }
+  console.log(`  Taitoja löytyi: ${skills.length} (käytössä ${enabledSkillList().length})`);
   console.log(`  Päiväraja: ${state.config.dailyTokenLimit.toLocaleString('fi-FI')} tokenia / ${state.config.maxTurnsPerDay} vuoroa\n`);
 });

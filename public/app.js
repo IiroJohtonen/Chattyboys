@@ -189,6 +189,31 @@ function renderPowers() {
     </div>`).join('');
 }
 
+let skillFilter = '';
+function renderSkills() {
+  const panel = $('#panel-skills');
+  if (panel.contains(document.activeElement) && document.activeElement.id === 'skill-filter') return;
+  const on = new Set(S.enabledSkills || []);
+  const q = skillFilter.toLowerCase();
+  const list = (S.skills || []).filter(k => !q || (k.id + ' ' + k.description).toLowerCase().includes(q));
+  const groups = {};
+  for (const k of list) (groups[k.plugin] ||= []).push(k);
+  panel.innerHTML = `<p class="hint">Taidot ovat Claude Code -pluginien asiantuntijaohjeita (SKILL.md). Rastita ne, jotka agentit saavat käyttöönsä – he näkevät listan ja lukevat koko ohjeen tarvittaessa.
+      Asenna uusia plugineja Claude Codessa komennolla <code>/plugin</code> ja paina Päivitä.</p>
+    <div class="item-actions" style="margin:0">
+      <input id="skill-filter" class="search" placeholder="Hae taitoja… (esim. viral, reels, instagram)" value="${esc(skillFilter)}">
+      <button class="btn sm" data-skills-refresh="1">↻ Päivitä</button>
+    </div>
+    <div class="section-title">Käytössä ${on.size} / löydetty ${(S.skills || []).length}</div>` +
+    (list.length ? Object.entries(groups).map(([plugin, ks]) => `
+      <div class="section-title">🧩 ${esc(plugin)}</div>` + ks.map(k => `
+      <label class="item skill ${on.has(k.id) ? 'on' : ''}" style="--c:${on.has(k.id) ? 'var(--ok)' : 'var(--border)'}">
+        <input type="checkbox" data-skill="${esc(k.id)}" ${on.has(k.id) ? 'checked' : ''}>
+        <span><span class="item-title">${esc(k.name)}</span><span class="item-detail">${esc(k.description || '')}</span></span>
+      </label>`).join('')).join('')
+      : `<div class="panel-empty">Taitoja ei löytynyt. Asenna plugineja Claude Codessa (<code>/plugin</code>) tai lisää SKILL.md-tiedostoja projektin <code>skills/</code>-kansioon.</div>`);
+}
+
 async function renderFiles() {
   if (activeTab !== 'files') return;
   const files = await fetch('/api/files').then(r => r.json()).catch(() => []);
@@ -205,7 +230,7 @@ function renderSettings() {
 }
 
 function renderAll() {
-  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSettings();
+  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSkills(); renderSettings();
 }
 
 // ---------- tapahtumat ----------
@@ -267,8 +292,9 @@ function modal(title, content) {
 }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-act],[data-vote],[data-code],[data-file],[data-pstatus]');
+  const t = e.target.closest('[data-act],[data-vote],[data-code],[data-file],[data-pstatus],[data-skills-refresh]');
   if (!t) return;
+  if (t.dataset.skillsRefresh) { const r = await api('/api/skills', { refresh: true }); toast(`🧠 Löytyi ${r.count ?? 0} taitoa`); return; }
   if (t.dataset.act) {
     const text = document.querySelector(`textarea[data-text="${t.dataset.id}"]`)?.value || '';
     t.disabled = true;
@@ -284,7 +310,16 @@ document.addEventListener('click', async e => {
     api('/api/powers/' + t.dataset.power, { status: t.dataset.pstatus });
   }
 });
+document.addEventListener('input', e => {
+  if (e.target.id === 'skill-filter') {
+    skillFilter = e.target.value;
+    const pos = e.target.selectionStart;
+    e.target.blur(); renderSkills();
+    const f = $('#skill-filter'); f.focus(); f.setSelectionRange(pos, pos);
+  }
+});
 document.addEventListener('change', e => {
+  if (e.target.dataset.skill) api('/api/skills', { toggle: e.target.dataset.skill });
   if (e.target.dataset.auto) api('/api/powers/' + e.target.dataset.auto, { autoRun: e.target.checked });
 });
 

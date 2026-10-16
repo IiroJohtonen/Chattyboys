@@ -57,6 +57,12 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
   * **script** – agentti kirjoittaa Node.js-skriptin. Näet koodin ennen hyväksyntää, ja jokainen ajo
     hyväksytään erikseen (ellei rastita "aja kysymättä"). Skriptit ajetaan Noden permission-mallilla:
     tiedostoihin pääsy vain `workspace/`-kansioon, ei aliprosesseja, 30 s aikaraja. Verkko (fetch) on sallittu.
+* **🧠 Taidot** – Claude Code -pluginien ja -skillien asiantuntijaohjeet (`SKILL.md`). Alusta etsii ne
+  kansioista `~/.claude/plugins`, `~/.claude/skills` ja projektin `skills/`. Rastita taidot, jotka agentit saavat.
+  Agentit näkevät rastitettujen taitojen listan ja lukevat koko ohjeen tarvittaessa (`load_skill`), enintään
+  kaksi kerrallaan tokenien säästämiseksi. Uusia plugineja asennetaan Claude Codessa komennolla `/plugin`,
+  esim. *Social Media Skills* (mm. `viral-reverse-engineering`, `reels-script`, `hook-writer`), minkä jälkeen
+  painetaan Taidot-välilehden ↻ Päivitä.
 * **📁 Työtila** – agenttien kirjoittamat luonnokset, suunnitelmat ja sivut.
 
 ## Turvallisuus
