@@ -68,3 +68,15 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
 * Ohjeistus kieltää huijaukset, roskapostin, valeprofiilit ja muun laittoman toiminnan.
 
 Tila tallentuu tiedostoon `data/state.json`, joten keskustelu jatkuu uudelleenkäynnistyksen jälkeen.
+
+## Vianetsintä
+
+**`claude CLI ei käynnisty: spawn claude ENOENT` / `claude-ohjelmaa ei löydy`**
+
+1. Asenna Claude Code: `npm install -g @anthropic-ai/claude-code`
+2. Sulje ja avaa terminaali uudelleen, aja `claude` ja kirjaudu sisään.
+3. Käynnistä palvelin uudelleen (`node server.js`). Terminaali kertoo, mistä Claude löytyi.
+4. Jos se ei vieläkään löydy, kerro polku itse. Windowsissa saat sen komennolla `where.exe claude`:
+   ```powershell
+   $env:CLAUDE_BIN="C:\Users\SINÄ\.local\bin\claude.exe"; node server.js
+   ```

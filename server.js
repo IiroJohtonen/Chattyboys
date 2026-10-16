@@ -3,7 +3,7 @@ import http from 'node:http';
 import { promises as fs, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { complete, backendName } from './lib/llm.js';
+import { complete, backendName, resolveClaude } from './lib/llm.js';
 import { AGENTS, AGENT_IDS, systemPrompt, turnPrompt, parseReply } from './lib/agents.js';
 import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspaceFile } from './lib/powers.js';
 
@@ -425,5 +425,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`\n  🦄🦉🦊  Chattyboys käynnissä: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`  Taustapalvelu: ${backendName()} · malli: ${state.config.model}`);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    const bin = resolveClaude();
+    console.log(bin ? `  Claude-ohjelma: ${[bin.cmd, ...bin.pre].join(' ')}`
+      : '  ⚠️  claude-ohjelmaa EI löytynyt! Asenna: npm install -g @anthropic-ai/claude-code, kirjaudu komennolla claude ja käynnistä tämä uudelleen.');
+  }
   console.log(`  Päiväraja: ${state.config.dailyTokenLimit.toLocaleString('fi-FI')} tokenia / ${state.config.maxTurnsPerDay} vuoroa\n`);
 });
