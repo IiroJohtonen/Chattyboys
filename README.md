@@ -73,9 +73,9 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
     videota ei julkaista kahdesti, eivätkä agentit voi muokata videokirjastoa. Julkaisuloki näkyy Voimat-välilehdellä.
   * Jos suora lataus omalta koneelta ei toimi tililläsi, anna agenteille julkinen https-linkki videoon.
   * **Vaihtoehto: kirjautuminen selaimella (epävirallinen).** ⚠️ Rikkoo Instagramin käyttöehtoja, joten tili
-    voi joutua tarkistukseen tai lukituksi. Asenna ensin `npm install playwright` (jos koneella ei ole Google
-    Chromea, myös `npx playwright install chromium`). Paina ⚙️ → Instagram → **🌐 Kirjaudu selaimella** ja
-    kirjaudu avautuvaan ikkunaan itse. Salasanaa ei tallenneta: kirjautuminen säilyy selainprofiilissa
+    voi joutua tarkistukseen tai lukituksi. Asenna ensin `npm install`. Paina ⚙️ → Instagram →
+    **🌐 Kirjaudu selaimella** ja kirjaudu avautuvaan **Microsoft Edge** -ikkunaan itse. Jos Edgeä ei ole,
+    käytetään Chromea. Selaimen voi valita itse asetuksella `IG_BROWSER=msedge|chrome|chromium`. Salasanaa ei tallenneta: kirjautuminen säilyy selainprofiilissa
     `data/ig-browser`. Julkaisu tapahtuu instagram.comin kautta selainikkunassa (aseta `IG_BROWSER_HEADLESS=1`,
     jos haluat sen piiloon). Jos jokin vaihe epäonnistuu, työtilaan tallentuu kuvakaappaus `ig-virhe-*.png`.
     Tilastot vaativat virallisen tunnuksen.

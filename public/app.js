@@ -303,7 +303,7 @@ $('#ig-form').onsubmit = async e => {
 $('#ig-browser-login').onclick = async e => {
   if (!confirm('Selainkirjautuminen on epävirallinen tapa ja rikkoo Instagramin käyttöehtoja – tili voi lukittua. Jatketaanko?')) return;
   e.target.disabled = true;
-  toast('🌐 Selainikkuna avautuu – kirjaudu Instagramiin (5 min aikaa)');
+  toast('🌐 Edge-ikkuna avautuu – kirjaudu Instagramiin (5 min aikaa)');
   const r = await api('/api/instagram', { browserLogin: true });
   e.target.disabled = false;
   if (r.ok) toast('📸 Kirjautuminen onnistui');
