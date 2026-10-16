@@ -258,6 +258,16 @@ function renderSettings() {
   $('#cost-hint').textContent = `Nykyisellä kulutuksella (~${fmt(S.estPerTurn)} tokenia/vuoro) päiväraja riittää noin ${turns} puheenvuoroon. Agentit pysähtyvät automaattisesti ennen rajaa.`;
 }
 
+function renderAi() {
+  const a = S.ai || {}, c = a.caps;
+  const f = $('#ai-form');
+  for (const k of ['ttsProvider', 'ttsVoice', 'imageProvider']) if (document.activeElement !== f.elements[k]) f.elements[k].value = S.config[k] ?? '';
+  const names = { elevenlabs: 'ElevenLabs', edge: 'edge-tts', windows: 'Windows', mac: 'macOS', espeak: 'espeak', silent: 'ei puhetta', openai: 'OpenAI', pollinations: 'Pollinations', card: 'värikortit' };
+  $('#ai-status').innerHTML = !c ? 'Tarkistetaan…' : !c.ffmpeg ? '⚠️ ffmpeg puuttuu – tekoälyvideot vaativat sen.'
+    : `Käytettävissä: ääni <b>${c.tts.map(x => names[x] || x).join(' › ')}</b> · kuvat <b>${c.images.map(x => names[x] || x).join(' › ')}</b>` +
+      `<br>Avaimet: ElevenLabs ${a.keys?.elevenlabs ? '✅' : '–'}${a.keys?.elevenlabs && !a.keys?.elevenlabsVoice ? ' (Voice ID puuttuu)' : ''} · OpenAI ${a.keys?.openai ? '✅' : '–'}`;
+}
+
 function renderInstagram() {
   const c = S.instagram || {};
   const today = (S.igLog || []).filter(l => new Date(l.ts).toDateString() === new Date().toDateString()).length;
@@ -272,7 +282,7 @@ function renderInstagram() {
 }
 
 function renderAll() {
-  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSkills(); renderSettings(); renderInstagram();
+  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSkills(); renderSettings(); renderInstagram(); renderAi();
 }
 
 // ---------- tapahtumat ----------
@@ -320,6 +330,16 @@ $('#settings').onsubmit = e => {
   api('/api/config', Object.fromEntries(new FormData(e.target))).then(() => toast('✅ Asetukset tallennettu'));
 };
 
+$('#ai-form').onsubmit = async e => {
+  e.preventDefault();
+  const d = Object.fromEntries(new FormData(e.target));
+  await api('/api/config', { ttsProvider: d.ttsProvider, ttsVoice: d.ttsVoice, imageProvider: d.imageProvider });
+  const k = {};
+  for (const n of ['elevenlabsKey', 'elevenlabsVoice', 'openaiKey']) if (d[n]) k[n] = d[n];
+  await api('/api/aikeys', k);
+  for (const n of ['elevenlabsKey', 'openaiKey']) e.target.elements[n].value = '';
+  toast('🎙️ Tekoälyvideoasetukset tallennettu');
+};
 $('#ig-form').onsubmit = async e => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(e.target));

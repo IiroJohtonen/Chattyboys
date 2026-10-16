@@ -91,6 +91,18 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
     (koukku, kohtaukset, teksti ruudulla, pituus) kansioon `scripts/` ja Pyynnöt-välilehdelle.
   * Vaatii **ffmpegin** (Windows: `winget install ffmpeg`). Litterointi vaatii lisäksi Whisperin
     (`pip install openai-whisper`, valinnainen).
+* **🤖 Tekoälyvideot** (`ai_video`) – agentit tekevät kokonaan omia videoita: kirjoittavat käsikirjoituksen
+  kohtauksittain, alusta tekee puheäänen, hakee tai luo kuvat, koostaa 9:16-videon (kuviin hidas zoomaus),
+  ajoittaa tekstitykset puheen mukaan ja polttaa ne videoon. Tulos tallentuu kansioon `videos/ai/` julkaistavaksi.
+  * **Ääni** (⚙️ → Tekoälyvideot), parhaasta alkaen: ElevenLabs (avain + Voice ID, myös oman äänesi klooni) →
+    edge-tts (`pip install edge-tts`, Microsoftin luonnolliset suomenkieliset äänet, esim. `fi-FI-NooraNeural`) →
+    koneen oma puhesyntetisaattori (Windows / macOS / espeak-ng) → ei puhetta (pelkät tekstit).
+  * **Kuvat:** OpenAI-kuvagenerointi (avain) → Pollinations (ilmainen, ei avainta) → värikortit. Agentit voivat käyttää
+    myös omia klippejäsi (`clip: videos/x.mp4@5`).
+  * **Taustamusiikki:** laita omia tai rojaltivapaita kappaleita kansioon `workspace/music/`.
+  * Videot merkitään tekoälyllä tehdyiksi: jos kuvatekstissä ei mainita tekoälyä, julkaisuun lisätään rivi
+    "🤖 Video tehty tekoälyn avulla". Agentit eivät tee realistisia kuvia oikeista ihmisistä eivätkä käytä
+    tunnettuja hahmoja, brändejä tai tekijänoikeudellista musiikkia.
 * **🎨 Brändiprofiili** (⚙️) – kohdeyleisö, aihe, äänensävy, tavoite ja kielletyt asiat. Agentit noudattavat sitä aina.
   Jos se on tyhjä, agentit kysyvät tiedot sinulta ja kirjoittavat tiedoston `brand.md` itse.
 * **📊 Palautesilmukka** – 24 tunnin ja 7 päivän kuluttua julkaisusta alusta hakee tulokset (katselut,

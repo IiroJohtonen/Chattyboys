@@ -94,6 +94,34 @@
           <button type="button" class="btn primary" data-brand-save="1">Tallenna brändiprofiili</button>
         </div>
         <hr>
+        <form id="ai-form" class="settings">
+          <div class="section-title">🎙️ Tekoälyvideot</div>
+          <p class="hint" id="ai-status">…</p>
+          <label>Puheääni
+            <select name="ttsProvider">
+              <option value="auto">Automaattinen (paras saatavilla)</option>
+              <option value="elevenlabs">ElevenLabs (paras laatu, myös oma äänesi)</option>
+              <option value="edge">edge-tts (Microsoftin luonnolliset äänet, ilmainen)</option>
+              <option value="windows">Windowsin oma puhesyntetisaattori</option>
+              <option value="mac">macOS say</option>
+              <option value="espeak">espeak-ng</option>
+              <option value="silent">Ei puhetta (pelkät tekstit + musiikki)</option>
+            </select></label>
+          <label>Ääni (valinnainen)<input name="ttsVoice" placeholder="edge: fi-FI-NooraNeural tai fi-FI-HarriNeural · windows: fi-FI"></label>
+          <label>Kuvat
+            <select name="imageProvider">
+              <option value="auto">Automaattinen</option>
+              <option value="openai">OpenAI-kuvagenerointi (avain)</option>
+              <option value="pollinations">Pollinations (ilmainen, ei avainta)</option>
+              <option value="card">Ei tekoälykuvia (värikortit ja omat klipit)</option>
+            </select></label>
+          <label>ElevenLabs API-avain<input name="elevenlabsKey" type="password" autocomplete="off" placeholder="tallennettu vain koneellesi"></label>
+          <label>ElevenLabs Voice ID<input name="elevenlabsVoice" autocomplete="off" placeholder="esim. oman kloonatun äänesi ID"></label>
+          <label>OpenAI API-avain (kuvat)<input name="openaiKey" type="password" autocomplete="off" placeholder="sk-…"></label>
+          <button class="btn primary">Tallenna</button>
+          <p class="hint">Taustamusiikki: laita omia tai rojaltivapaita kappaleita kansioon <code>workspace/music/</code>. Avaa Voimat-välilehdeltä <b>ai_video</b>.</p>
+        </form>
+        <hr>
         <form id="ig-form" class="settings">
           <div class="section-title">📸 Instagram</div>
           <p class="hint" id="ig-status">Ei yhdistetty.</p>

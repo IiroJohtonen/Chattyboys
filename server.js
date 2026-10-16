@@ -9,6 +9,7 @@ import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspa
 import { discoverSkills, readSkill } from './lib/skills.js';
 import * as ig from './lib/instagram.js';
 import * as media from './lib/media.js';
+import * as aivideo from './lib/aivideo.js';
 import { WORKSPACE } from './lib/powers.js';
 import { browserStatus, login as igBrowserLogin, logout as igBrowserLogout, publishViaBrowser } from './lib/igbrowser.js';
 
@@ -27,6 +28,9 @@ const DEFAULT_CONFIG = {
   maxOpenInbox: 3, // pysähdytään odottamaan, jos näin monta pyyntöä on vastaamatta
   language: 'suomi',
   igDailyPublishLimit: Number(process.env.IG_DAILY_PUBLISH_LIMIT || 2),
+  ttsProvider: process.env.TTS_PROVIDER || 'auto',   // auto | elevenlabs | edge | windows | mac | espeak | silent
+  ttsVoice: process.env.TTS_VOICE || '',             // esim. fi-FI-NooraNeural (edge) tai fi-FI (windows)
+  imageProvider: process.env.IMAGE_PROVIDER || 'auto', // auto | openai | pollinations | card
   autoAnalyzeVideos: Number(process.env.AUTO_ANALYZE_VIDEOS ?? 1), // 1 = agentit "katsovat" uudet videot automaattisesti
 };
 
@@ -58,6 +62,8 @@ function freshState() {
 
 let state = freshState();
 let skills = []; // koneelta löydetyt taidot
+let aiCaps = null; // käytettävissä olevat ääni- ja kuvapalvelut
+const refreshAiCaps = async () => { aiCaps = await aivideo.aiCapabilities(true).catch(() => null); };
 async function refreshSkills() { skills = await discoverSkills(); }
 const enabledSkillList = () => skills.filter(k => state.enabledSkills?.includes(k.id));
 if (existsSync(STATE_FILE)) {
@@ -94,7 +100,7 @@ function send(type, data) {
 }
 function meta() {
   const { messages, pendingSkills, ...rest } = state;
-  return { ...rest, skills, instagram: { connected: ig.igConnected(), username: ig.igConfig().username, browser: browserStatus().loggedIn }, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
+  return { ...rest, skills, instagram: { connected: ig.igConnected(), username: ig.igConfig().username, browser: browserStatus().loggedIn }, ai: { caps: aiCaps, keys: aivideo.keyStatus() }, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
 }
 const broadcastMeta = () => { save(); send('meta', meta()); };
 
@@ -333,6 +339,18 @@ function publishedToday() {
   return (state.igLog || []).filter(l => new Date(l.ts).toISOString().slice(0, 10) === today).length;
 }
 
+let rendering = false;
+async function runAiVideo(input, who) {
+  if (rendering) throw new Error('Toinen tekoälyvideo on jo tekeillä – odota että se valmistuu');
+  rendering = true;
+  try {
+    sysMsg(`🎬 ${who} tekee tekoälyvideota "${input?.title || ''}"… (kestää tyypillisesti 1–5 min)`, { tool: 'ai_video' });
+    const r = await aivideo.makeAiVideo(input, { config: state.config });
+    return `✅ Tekoälyvideo valmis: ${r.rel} (${r.seconds} s, ääni: ${r.tts}, kuvat: ${r.images}${r.music ? ', taustamusiikki' : ''}).` +
+      (r.notes.length ? `\nHuomiot: ${r.notes.join('; ')}` : '') + '\nVideo on kirjastossa julkaistavissa.';
+  } finally { rendering = false; }
+}
+
 let publishing = false;
 async function runInstagram(p, input = {}, who) {
   if (['instagram_insights', 'instagram_comments', 'instagram_reply'].includes(p.name)) {
@@ -352,6 +370,9 @@ async function publishNow(input, who) {
   }
   if ((state.igLog || []).some(l => l.video === input.video)) throw new Error(`${input.video} on jo julkaistu`);
   sysMsg(`📤 Julkaistaan ${input.video} Instagramiin… (käsittely voi kestää muutaman minuutin)`, { tool: 'instagram_publish' });
+  if (String(input.video || '').startsWith('videos/ai/') && !/teko[äa]ly|\bAI\b/i.test(String(input.caption || ''))) {
+    input = { ...input, caption: `${input.caption || ''}\n\n🤖 Video tehty tekoälyn avulla.`.trim() };
+  }
   const r = ig.igConnected() ? await ig.publishReel(input) : await publishViaBrowser(input);
   state.igLog = [...(state.igLog || []), { ts: now(), video: input.video, caption: String(input.caption || '').slice(0, 300), id: r.id, permalink: r.permalink, by: who }].slice(-200);
   return `✅ Julkaistu! ${r.permalink || 'id ' + r.id}`;
@@ -361,6 +382,7 @@ async function runPowerAsync(p, input, who) {
   try {
     const out = p.name.startsWith('instagram_') ? await runInstagram(p, input, who)
       : p.name === 'video_edit' ? await media.editVideo(input)
+      : p.name === 'ai_video' ? await runAiVideo(input, who)
       : await executePower(p, input);
     sysMsg(`⚙️ ${p.name} (${who}):\n${out}`, { tool: p.name });
   } catch (e) {
@@ -489,7 +511,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/config') {
       const b = await body(req);
-      for (const k of Object.keys(DEFAULT_CONFIG)) if (b[k] !== undefined && b[k] !== '') {
+      for (const k of Object.keys(DEFAULT_CONFIG)) if (b[k] !== undefined && (b[k] !== '' || typeof DEFAULT_CONFIG[k] === 'string')) {
         state.config[k] = typeof DEFAULT_CONFIG[k] === 'number' ? Math.max(0, Number(b[k])) : String(b[k]);
       }
       if (state.status === 'budget' && !budgetBlock()) state.status = 'idle';
@@ -514,6 +536,13 @@ const server = http.createServer(async (req, res) => {
         broadcastMeta();
         return json(res, 200, { ok: true, ...r });
       } catch (e) { return json(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/aikeys') {
+      const b = await body(req);
+      aivideo.saveAiKeys({ elevenlabsKey: b.elevenlabsKey?.trim(), elevenlabsVoice: b.elevenlabsVoice?.trim(), openaiKey: b.openaiKey?.trim() });
+      await refreshAiCaps();
+      broadcastMeta();
+      return json(res, 200, { ok: true, caps: aiCaps });
     }
     if (url.pathname === '/api/brand') {
       if (req.method === 'POST') {
@@ -574,7 +603,7 @@ async function analyzePending() {
   analyzing = true;
   try {
     for (const v of await media.listVideos()) {
-      if (v.file.startsWith('videos/edits/') || media.videoMeta(v.file)?.analysis) continue;
+      if (v.file.startsWith('videos/edits/') || v.file.startsWith('videos/ai/') || media.videoMeta(v.file)?.analysis) continue;
       if (now() - (analyzeFailed.get(v.file) || 0) < 3600_000) continue;
       if (budgetBlock()) break;
       try {
@@ -615,6 +644,7 @@ setInterval(() => checkStats().catch(e => console.error(e)), 15 * 60_000);
 setTimeout(() => { analyzePending().catch(() => {}); checkStats().catch(() => {}); }, 5000);
 
 await refreshSkills();
+await refreshAiCaps();
 server.listen(PORT, HOST, () => {
   console.log(`\n  🦄🦉🦊  Chattyboys käynnissä: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`  Taustapalvelu: ${backendName()} · malli: ${state.config.model}`);
@@ -624,6 +654,7 @@ server.listen(PORT, HOST, () => {
       : '  ⚠️  claude-ohjelmaa EI löytynyt! Asenna: npm install -g @anthropic-ai/claude-code, kirjaudu komennolla claude ja käynnistä tämä uudelleen.');
   }
   media.mediaTools().then(t => console.log(`  Videotyökalut: ffmpeg ${t.ffmpeg ? '✅' : '❌ (asenna, jotta agentit näkevät videot)'} · whisper ${t.whisper ? '✅' : '– (valinnainen, puheen litterointi)'}`));
+  if (aiCaps) console.log(`  Tekoälyvideot: ääni ${aiCaps.tts.join(' › ')} · kuvat ${aiCaps.images.join(' › ')}`);
   console.log(`  Taitoja löytyi: ${skills.length} (käytössä ${enabledSkillList().length})`);
   console.log(`  Päiväraja: ${state.config.dailyTokenLimit.toLocaleString('fi-FI')} tokenia / ${state.config.maxTurnsPerDay} vuoroa\n`);
 });
