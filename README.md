@@ -63,6 +63,15 @@ kolmen peräkkäisen virheen jälkeen. Mittarit näkyvät yläpalkissa.
   kaksi kerrallaan tokenien säästämiseksi. Uusia plugineja asennetaan Claude Codessa komennolla `/plugin`,
   esim. *Social Media Skills* (mm. `viral-reverse-engineering`, `reels-script`, `hook-writer`), minkä jälkeen
   painetaan Taidot-välilehden ↻ Päivitä.
+* **📸 Instagram** – yhdistä oma Instagram Business- tai Creator-tili (⚙️ → Instagram, käyttöoikeustunnus
+  Metan virallisesta Instagram-rajapinnasta). Tunnus tallentuu vain tiedostoon `data/secrets.json`.
+  * `instagram_insights` – agentit lukevat julkaisujesi tilastot (katselut, tavoittavuus, tykkäykset, jaot,
+    tallennukset) parhaat ensin ja vertaavat niitä viraalisuustaitojen avulla.
+  * `instagram_publish` – agentit valitsevat videon kansiosta `workspace/videos/`, kirjoittavat kuvatekstin ja
+    julkaisevat sen Reelinä. Oletuksena jokainen julkaisu hyväksytään Pyynnöt-välilehdellä. Jos rastitat
+    voimalle *aja kysymättä*, agentit julkaisevat itsenäisesti. Päiväraja (oletus 2, ⚙️) pätee aina, samaa
+    videota ei julkaista kahdesti, eivätkä agentit voi muokata videokirjastoa. Julkaisuloki näkyy Voimat-välilehdellä.
+  * Jos suora lataus omalta koneelta ei toimi tililläsi, anna agenteille julkinen https-linkki videoon.
 * **📁 Työtila** – agenttien kirjoittamat luonnokset, suunnitelmat ja sivut.
 
 ## Turvallisuus

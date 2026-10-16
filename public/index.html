@@ -81,9 +81,25 @@
           <label>Viestejä kontekstissa<input name="contextMessages" type="number" min="4" max="80"></label>
           <label>Pysähdy kun avoimia pyyntöjä<input name="maxOpenInbox" type="number" min="1"></label>
           <label>Kieli<input name="language"></label>
+          <label>Instagram-julkaisuja päivässä (max)<input name="igDailyPublishLimit" type="number" min="0" max="25"></label>
           <button class="btn primary">Tallenna</button>
           <p class="hint" id="cost-hint"></p>
-          <hr>
+        </form>
+        <hr>
+        <form id="ig-form" class="settings">
+          <div class="section-title">📸 Instagram</div>
+          <p class="hint" id="ig-status">Ei yhdistetty.</p>
+          <label>Käyttöoikeustunnus (access token)<input name="token" type="password" autocomplete="off" placeholder="IGAA… tai EAA…"></label>
+          <label>Instagram-tilin ID (valinnainen)<input name="userId" autocomplete="off" placeholder="haetaan automaattisesti"></label>
+          <label>Rajapinta<input name="host" placeholder="graph.instagram.com (Facebook-kirjautumisella graph.facebook.com)"></label>
+          <div class="item-actions" style="margin:0">
+            <button class="btn primary">Yhdistä</button>
+            <button type="button" class="btn danger" id="ig-disconnect" hidden>Katkaise yhteys</button>
+          </div>
+          <p class="hint">Tunnus tallennetaan vain koneellesi (<code>data/secrets.json</code>), eikä sitä näytetä agenteille. Laita julkaistavat videot kansioon <code>workspace/videos/</code>. Avaa sitten Voimat-välilehdeltä <b>instagram_insights</b> ja <b>instagram_publish</b>.</p>
+        </form>
+        <hr>
+        <form class="settings">
           <button type="button" class="btn danger" id="btn-reset">Aloita keskustelu alusta</button>
           <p class="hint">Nollaa keskustelun, ideat ja voimat. Päivän käyttö säilyy.</p>
         </form>

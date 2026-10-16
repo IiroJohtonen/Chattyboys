@@ -175,6 +175,9 @@ function renderPowers() {
   const kindFi = { builtin: 'sisäänrakennettu', script: 'skripti', manual: 'sinä suoritat' };
   const statusFi = { enabled: 'käytössä', pending: 'odottaa', locked: 'lukittu', rejected: 'hylätty' };
   $('#panel-powers').innerHTML = `<p class="hint">Voimat ovat kykyjä, joita agentit rakentavat itselleen. Jokainen vaatii hyväksyntäsi. Skriptit ajetaan rajatussa Node-prosessissa (vain työtilan tiedostot, 30 s aikaraja).</p>` +
+    (S.igLog?.length ? `<div class="section-title">📸 Instagram-julkaisut</div>` + [...S.igLog].reverse().slice(0, 10).map(l => `
+      <div class="item" style="--c:${colorOf(l.by)}"><div class="item-head"><span class="tag">${esc(l.video)}</span><span class="right">${new Date(l.ts).toLocaleString('fi-FI')}</span></div>
+      <div class="item-detail">${esc(l.caption)}</div>${l.permalink ? `<div class="item-actions"><a class="link" href="${esc(l.permalink)}" target="_blank" rel="noopener">Avaa Instagramissa ↗</a></div>` : ''}</div>`).join('') + `<div class="section-title">Voimat</div>` : '') +
     S.powers.map(p => `
     <div class="item" style="--c:${p.status === 'enabled' ? 'var(--ok)' : p.status === 'pending' ? 'var(--warn)' : 'var(--border)'}">
       <div class="item-head"><span class="tag">⚡ ${esc(p.name)}</span> · ${kindFi[p.kind] || p.kind} · ${p.proposedBy === 'system' ? 'valmis' : who(p.proposedBy)}
@@ -182,7 +185,7 @@ function renderPowers() {
       <div class="item-detail">${esc(p.description)}</div>
       ${p.code ? `<div class="item-actions"><button class="btn sm ghost" data-code="${esc(p.name)}">Näytä koodi</button></div>` : ''}
       <div class="item-actions">
-        ${p.kind === 'script' && p.status === 'enabled' ? `<label class="toggle"><input type="checkbox" data-auto="${esc(p.name)}" ${p.autoRun ? 'checked' : ''}> aja kysymättä</label>` : ''}
+        ${(p.kind === 'script' || p.confirm) && p.status === 'enabled' ? `<label class="toggle"><input type="checkbox" data-auto="${esc(p.name)}" ${p.autoRun ? 'checked' : ''}> aja kysymättä</label>` : ''}
         ${p.status === 'enabled' && !p.name.startsWith('workspace_') ? `<button class="btn sm danger" data-pstatus="disabled" data-power="${esc(p.name)}">Poista käytöstä</button>` : ''}
         ${p.status === 'locked' ? `<button class="btn sm" data-pstatus="enabled" data-power="${esc(p.name)}">Avaa</button>` : ''}
       </div>
@@ -229,8 +232,14 @@ function renderSettings() {
   $('#cost-hint').textContent = `Nykyisellä kulutuksella (~${fmt(S.estPerTurn)} tokenia/vuoro) päiväraja riittää noin ${turns} puheenvuoroon. Agentit pysähtyvät automaattisesti ennen rajaa.`;
 }
 
+function renderInstagram() {
+  const c = S.instagram || {};
+  $('#ig-status').innerHTML = c.connected ? `✅ Yhdistetty: <b>@${esc(c.username || '?')}</b> · julkaisuja tänään ${(S.igLog || []).filter(l => new Date(l.ts).toDateString() === new Date().toDateString()).length}/${S.config.igDailyPublishLimit}` : 'Ei yhdistetty.';
+  $('#ig-disconnect').hidden = !c.connected;
+}
+
 function renderAll() {
-  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSkills(); renderSettings();
+  renderHeader(); renderStage(); renderInbox(); renderIdeas(); renderPowers(); renderSkills(); renderSettings(); renderInstagram();
 }
 
 // ---------- tapahtumat ----------
@@ -277,6 +286,14 @@ $('#settings').onsubmit = e => {
   e.preventDefault();
   api('/api/config', Object.fromEntries(new FormData(e.target))).then(() => toast('✅ Asetukset tallennettu'));
 };
+
+$('#ig-form').onsubmit = async e => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target));
+  const r = await api('/api/instagram', data);
+  if (r.ok) { toast(`📸 Yhdistetty: @${r.username}`); e.target.reset(); }
+};
+$('#ig-disconnect').onclick = () => confirm('Katkaistaanko Instagram-yhteys?') && api('/api/instagram', { disconnect: true });
 
 $('#tabs').onclick = e => {
   const b = e.target.closest('button[data-tab]'); if (!b) return;

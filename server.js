@@ -7,6 +7,7 @@ import { complete, backendName, resolveClaude } from './lib/llm.js';
 import { AGENTS, AGENT_IDS, systemPrompt, turnPrompt, parseReply } from './lib/agents.js';
 import { BUILTIN_POWERS, executePower, installScript, listWorkspace, readWorkspaceFile } from './lib/powers.js';
 import { discoverSkills, readSkill } from './lib/skills.js';
+import * as ig from './lib/instagram.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1'; // vain omalta koneelta – käyttää tunnuksiasi
@@ -22,6 +23,7 @@ const DEFAULT_CONFIG = {
   contextMessages: 24,
   maxOpenInbox: 3, // pysähdytään odottamaan, jos näin monta pyyntöä on vastaamatta
   language: 'suomi',
+  igDailyPublishLimit: Number(process.env.IG_DAILY_PUBLISH_LIMIT || 2),
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -46,6 +48,7 @@ function freshState() {
     usageHistory: [],
     enabledSkills: [],
     pendingSkills: {},
+    igLog: [],
   };
 }
 
@@ -57,7 +60,11 @@ if (existsSync(STATE_FILE)) {
   try {
     const saved = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
     state = { ...state, ...saved, config: { ...DEFAULT_CONFIG, ...saved.config } };
-    for (const b of BUILTIN_POWERS) if (!state.powers.find(p => p.name === b.name)) state.powers.push({ ...b, proposedBy: 'system' });
+    for (const b of BUILTIN_POWERS) {
+      const p = state.powers.find(x => x.name === b.name);
+      if (!p) state.powers.push({ ...b, proposedBy: 'system', autoRun: false });
+      else Object.assign(p, { kind: b.kind, description: b.description, input_hint: b.input_hint, confirm: b.confirm });
+    }
   } catch (e) { console.error('Tilan lataus epäonnistui, aloitetaan alusta:', e.message); }
 }
 state.running = false; state.speaking = null; state.status = 'idle';
@@ -83,7 +90,7 @@ function send(type, data) {
 }
 function meta() {
   const { messages, pendingSkills, ...rest } = state;
-  return { ...rest, skills, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
+  return { ...rest, skills, instagram: { connected: ig.igConnected(), username: ig.igConfig().username }, backend: backendName(), agents: AGENTS, estPerTurn: estPerTurn() };
 }
 const broadcastMeta = () => { save(); send('meta', meta()); };
 
@@ -112,6 +119,12 @@ function budgetBlock() {
 }
 
 // ---------- vuorot ----------
+async function videosForPrompt() {
+  const usable = state.powers.some(p => p.name === 'instagram_publish' && p.status === 'enabled');
+  if (!ig.igConnected() || !usable) return null;
+  return ig.listVideos().catch(() => []);
+}
+
 function takeLoaded(agentId) {
   const l = state.pendingSkills?.[agentId] || [];
   if (state.pendingSkills) delete state.pendingSkills[agentId];
@@ -165,7 +178,7 @@ async function runTurn({ force = false } = {}) {
   try {
     const { text, tokens, costUsd } = await complete({
       system: systemPrompt(agent, state.config),
-      prompt: turnPrompt(state, agentId, state.config, { skills: enabledSkillList(), loaded: takeLoaded(agentId) }),
+      prompt: turnPrompt(state, agentId, state.config, { skills: enabledSkillList(), loaded: takeLoaded(agentId), videos: await videosForPrompt() }),
       model: state.config.model,
     });
     rollDay();
@@ -283,7 +296,7 @@ async function handleAction(agentId, a) {
         addInbox({ type: 'task', from: agentId, title: `${p.name}: ${typeof a.input === 'string' ? a.input : JSON.stringify(a.input)}`.slice(0, 600), power: p.name, input: a.input });
         return { icon: '🧑‍🔧', summary: `pyysi omistajaa suorittamaan ${p.name}` };
       }
-      if (p.kind === 'script' && !p.autoRun) {
+      if ((p.kind === 'script' || p.confirm) && !p.autoRun) {
         addInbox({ type: 'run', from: agentId, title: `Aja ${p.name}`, detail: JSON.stringify(a.input ?? {}, null, 2), power: p.name, input: a.input });
         return { icon: '▶️', summary: `pyysi ajamaan ${p.name}` };
       }
@@ -295,9 +308,33 @@ async function handleAction(agentId, a) {
   }
 }
 
+function publishedToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  return (state.igLog || []).filter(l => new Date(l.ts).toISOString().slice(0, 10) === today).length;
+}
+
+let publishing = false;
+async function runInstagram(p, input = {}, who) {
+  if (p.name === 'instagram_insights') return ig.insights(input);
+  if (publishing) throw new Error('Toinen julkaisu on kesken – yritä hetken päästä');
+  publishing = true;
+  try { return await publishNow(input, who); } finally { publishing = false; }
+}
+
+async function publishNow(input, who) {
+  if (publishedToday() >= state.config.igDailyPublishLimit) {
+    throw new Error(`Päivän julkaisuraja (${state.config.igDailyPublishLimit}) täynnä – seuraava julkaisu huomenna`);
+  }
+  if ((state.igLog || []).some(l => l.video === input.video)) throw new Error(`${input.video} on jo julkaistu`);
+  sysMsg(`📤 Julkaistaan ${input.video} Instagramiin… (käsittely voi kestää muutaman minuutin)`, { tool: 'instagram_publish' });
+  const r = await ig.publishReel(input);
+  state.igLog = [...(state.igLog || []), { ts: now(), video: input.video, caption: String(input.caption || '').slice(0, 300), id: r.id, permalink: r.permalink, by: who }].slice(-200);
+  return `✅ Julkaistu! ${r.permalink || 'id ' + r.id}`;
+}
+
 async function runPowerAsync(p, input, who) {
   try {
-    const out = await executePower(p, input);
+    const out = p.name.startsWith('instagram_') ? await runInstagram(p, input, who) : await executePower(p, input);
     sysMsg(`⚙️ ${p.name} (${who}):\n${out}`, { tool: p.name });
   } catch (e) {
     sysMsg(`⚠️ ${p.name} epäonnistui: ${e.message}`, { tool: p.name });
@@ -427,6 +464,16 @@ const server = http.createServer(async (req, res) => {
       if (state.status === 'budget' && !budgetBlock()) state.status = 'idle';
       broadcastMeta();
       return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/instagram') {
+      const b = await body(req);
+      if (b.disconnect) { ig.disconnect(); broadcastMeta(); return json(res, 200, { ok: true }); }
+      try {
+        const r = await ig.connect({ token: b.token?.trim(), userId: b.userId?.trim(), host: b.host?.trim(), version: b.version?.trim() });
+        sysMsg(`📸 Instagram yhdistetty: @${r.username}`);
+        broadcastMeta();
+        return json(res, 200, { ok: true, ...r });
+      } catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (req.method === 'POST' && url.pathname === '/api/skills') {
       const b = await body(req);
