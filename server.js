@@ -653,7 +653,7 @@ server.listen(PORT, HOST, () => {
     console.log(bin ? `  Claude-ohjelma: ${[bin.cmd, ...bin.pre].join(' ')}`
       : '  ⚠️  claude-ohjelmaa EI löytynyt! Asenna: npm install -g @anthropic-ai/claude-code, kirjaudu komennolla claude ja käynnistä tämä uudelleen.');
   }
-  media.mediaTools().then(t => console.log(`  Videotyökalut: ffmpeg ${t.ffmpeg ? '✅' : '❌ (asenna, jotta agentit näkevät videot)'} · whisper ${t.whisper ? '✅' : '– (valinnainen, puheen litterointi)'}`));
+  media.mediaTools().then(t => console.log(`  Videotyökalut: ffmpeg ${t.ffmpeg ? '✅ (' + media.FFMPEG + ')' : '❌ (asenna: winget install --id Gyan.FFmpeg -e – ja avaa uusi PowerShell)'} · whisper ${t.whisper ? '✅' : '– (valinnainen, puheen litterointi)'}`));
   if (aiCaps) console.log(`  Tekoälyvideot: ääni ${aiCaps.tts.join(' › ')} · kuvat ${aiCaps.images.join(' › ')}`);
   console.log(`  Taitoja löytyi: ${skills.length} (käytössä ${enabledSkillList().length})`);
   console.log(`  Päiväraja: ${state.config.dailyTokenLimit.toLocaleString('fi-FI')} tokenia / ${state.config.maxTurnsPerDay} vuoroa\n`);
